@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Nova Pay · Gateway</title>
+<style>
+:root{--bg:#07080d;--s1:#0f1119;--s2:#171a26;--bd:#232738;--tx:#eef0f7;--mu:#8b91a7;--ac:#7c5cff;--ac2:#22d3ee;--ok:#2ee59d;--er:#ff5d73;--wa:#ffb84d}
+*{box-sizing:border-box;margin:0}
+body{font:14px/1.5 Inter,system-ui,sans-serif;background:radial-gradient(900px 500px at 85% -10%,#7c5cff22,transparent),var(--bg);color:var(--tx);min-height:100vh}
+aside{position:fixed;inset:0 auto 0 0;width:250px;background:var(--s1);border-right:1px solid var(--bd);padding:18px 12px;overflow:auto;z-index:5;transition:.25s}
+.logo{display:flex;gap:10px;align-items:center;font-weight:800;font-size:17px;padding:4px 8px 16px}
+.logo i{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,var(--ac),var(--ac2));display:grid;place-items:center;font-style:normal}
+aside h6{color:var(--mu);font-size:11px;letter-spacing:.1em;margin:16px 8px 6px;text-transform:uppercase}
+aside a{display:flex;justify-content:space-between;padding:9px 12px;border-radius:10px;color:var(--mu);text-decoration:none;font-weight:500;cursor:pointer}
+aside a:hover{background:var(--s2);color:var(--tx)}aside a.on{background:linear-gradient(90deg,#7c5cff33,#22d3ee11);color:var(--tx)}
+aside b{background:var(--ok);color:#000;font-size:10px;border-radius:99px;padding:1px 7px;align-self:center}
+main{margin-left:250px;padding:28px;max-width:1100px}
+#menu{display:none;position:fixed;top:12px;right:12px;z-index:9;background:var(--s2);color:var(--tx);border:1px solid var(--bd);border-radius:10px;padding:8px 12px}
+h1{font-size:24px;margin-bottom:2px}.sub{color:var(--mu);margin-bottom:20px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:18px}
+.card{background:var(--s1);border:1px solid var(--bd);border-radius:16px;padding:18px;margin-bottom:16px}
+.grid .card{margin:0}.k{color:var(--mu);font-size:12px}.v{font-size:24px;font-weight:800;margin-top:4px}
+.g{background:linear-gradient(135deg,#7c5cff,#22d3ee);-webkit-background-clip:text;color:transparent}
+label{display:block;color:var(--mu);font-size:12px;margin:12px 0 5px}
+input,select{width:100%;background:var(--s2);border:1px solid var(--bd);color:var(--tx);border-radius:10px;padding:10px 12px;font:inherit}
+input:focus,select:focus{outline:2px solid var(--ac);border-color:transparent}
+.btn{background:linear-gradient(135deg,var(--ac),#5b8cff);color:#fff;border:0;border-radius:10px;padding:10px 16px;font-weight:700;cursor:pointer;margin-top:14px}
+.btn.o{background:var(--s2);border:1px solid var(--bd);color:var(--tx);margin:0;padding:6px 10px;font-size:12px}
+.btn.r{background:#ff5d7322;color:var(--er);margin:0;padding:6px 10px;font-size:12px}
+table{width:100%;border-collapse:collapse}th{color:var(--mu);font-weight:500;text-align:left;font-size:12px}
+td,th{padding:10px 8px;border-bottom:1px solid var(--bd)}.empty{text-align:center;color:var(--mu);padding:28px}
+.t{border-radius:99px;padding:2px 9px;font-size:11px;font-weight:700}
+.pago,.aprovado,.ativo{background:#2ee59d22;color:var(--ok)}.pendente{background:#ffb84d22;color:var(--wa)}.reembolsado,.rejeitado,.suspenso{background:#ff5d7322;color:var(--er)}
+code,.code{background:var(--s2);border:1px solid var(--bd);border-radius:10px;padding:10px;display:block;word-break:break-all;font:12px monospace;margin-top:8px;white-space:pre-wrap}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+#toast{position:fixed;bottom:20px;right:20px;background:var(--s2);border:1px solid var(--ac);padding:10px 16px;border-radius:12px;opacity:0;transition:.3s;pointer-events:none}
+#toast.s{opacity:1}
+#login{position:fixed;inset:0;background:var(--bg);z-index:20;display:grid;place-items:center}#login .card{width:340px}
+@media(max-width:800px){aside{transform:translateX(-100%)}aside.open{transform:none}main{margin:0;padding:64px 16px 24px}#menu{display:block}.row{grid-template-columns:1fr}}
+</style></head><body>
+<button id="menu" onclick="document.querySelector('aside').classList.toggle('open')">☰</button>
+<div id="login"></div>
+<aside id="side"></aside><main id="app"></main><div id="toast"></div>
+<script>
+const $=s=>document.querySelector(s);
+const DEF={sales:[],products:[],coupons:[],wd:[],users:[],audit:[],cfg:{name:'Nova Pay',ghost:'',route:'Nominal 1',tg:'',chat:'',alert:''},acc:{user:'admin',pass:'admin123'},token:'',fees:{'Nominal 1':{pct:0,fix:0},'Nominal 3':{pct:0,fix:0},'Nominal 7':{pct:0,fix:0}}};
+let S;try{S=JSON.parse(localStorage.gw)||DEF}catch(e){S=DEF}S={...DEF,...S};
+const save=()=>{try{localStorage.gw=JSON.stringify(S)}catch(e){}};
+const R=v=>(+v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+const uid=()=>Math.random().toString(36).slice(2,10);
+const log=(e,t)=>{S.audit.unshift({d:new Date().toLocaleString('pt-BR'),e,t,u:S.acc.user});save()};
+const toast=m=>{const t=$('#toast');t.textContent=m;t.className='s';setTimeout(()=>t.className='',2200)};
+const sum=(a,f)=>a.reduce((x,y)=>x+(f?f(y):y),0);
+const pago=()=>S.sales.filter(s=>s.st=='pago');
+const recv=()=>sum(pago(),s=>s.v);
+const saldo=()=>recv()-sum(S.wd.filter(w=>w.st!='rejeitado'),w=>w.v);
+const tag=s=>`<span class="t ${s}">${s}</span>`;
+const inp=(id,l,ty='text',v='',ph='')=>`<label>${l}</label><input id="${id}" type="${ty}" value="${v}" placeholder="${ph}">`;
+const val=id=>$('#'+id).value.trim();
+const head=(t,s)=>`<h1>${t}</h1><p class="sub">${s||''}</p>`;
+const tbl=(h,rows,m='Nada por aqui ainda')=>`<div class="card" style="overflow:auto"><table><tr>${h.map(x=>`<th>${x}</th>`).join('')}</tr>${rows.length?rows.join(''):`<tr><td class="empty" colspan="${h.length}">${m}</td></tr>`}</table></div>`;
+const stat=(k,v)=>`<div class="card"><div class="k">${k}</div><div class="v">${v}</div></div>`;
+const salesRows=l=>l.map(s=>`<tr><td>${s.d}</td><td>${s.c}</td><td>${s.m}</td><td>${R(s.v)}</td><td>${tag(s.st)}</td></tr>`);
+const MENU=[['Principal',[['home','Início'],['pix','Gerar Pix','NOVO'],['boleto','Gerar boleto','NOVO'],['vendas','Extrato & Vendas']]],['Gestão',[['produtos','Produtos'],['cupons','Cupons'],['config','Configurações'],['conta','Usuário & Senha']]],['Financeiro',[['saque','Saque'],['taxas','Taxas & Rotas'],['api','API']]],['Dono da plataforma',[['geral','Dashboard geral'],['usuarios','Usuários'],['aprovar','Aprovar saques'],['audit','Auditoria']]]];
+function newSale(c,m,v,extra={}){const s={id:uid(),d:new Date().toLocaleString('pt-BR'),c,m,v:+v,st:'pendente',...extra};S.sales.unshift(s);log('Cobrança criada',s.id);save();return s}
+const V={
+home(){const mo=new Date().getMonth();const hoje=new Date().toLocaleDateString('pt-BR');
+const ps=S.sales.length?Math.round(pago().length/S.sales.length*100):0;
+return head('Início',`Resumo de <b class="g">${S.cfg.name}</b> hoje.`)+`<div class="grid">${stat('Recebido hoje',R(sum(pago().filter(s=>s.d.startsWith(hoje)),s=>s.v)))}${stat('Saldo disponível',R(saldo()))}${stat('Total recebido',R(recv()))}${stat('Faturamento no mês',R(sum(pago().filter(s=>s.d.split('/')[1]==String(mo+1).padStart(2,'0')),s=>s.v)))}${stat('Pedidos pendentes',S.sales.filter(s=>s.st=='pendente').length)}${stat('Taxa de aprovação',ps+'%')}</div><div class="card"><div class="k">Link de checkout público</div><code>${location.href.split('#')[0]}#/checkout/${S.acc.user}</code></div><h3 style="margin:10px 0">Transações recentes</h3>`+tbl(['Data','Cliente','Método','Valor','Status'],salesRows(S.sales.slice(0,6)),'Ainda não existem transações')},
+pix(){return head('Gerar Pix','Crie uma cobrança manual.')+`<div class="card" style="max-width:480px">${inp('pv','Valor (R$)','number','','0,00')}${inp('pd','Descrição (opcional)')}<button class="btn" data-a="mkpix">Gerar Pix</button><div id="out"></div></div>`},
+boleto(){return head('Gerar boleto','Cobrança por boleto bancário.')+`<div class="card" style="max-width:480px">${inp('bn','Nome completo')}${inp('bd','CPF ou CNPJ')}${inp('be','E-mail (opcional)','email')}${inp('bv','Valor','number')}<button class="btn" data-a="mkbol">Gerar boleto</button><div id="out"></div></div>`},
+vendas(){return head('Extrato & Vendas','Todos os pedidos.')+tbl(['Data','Cliente / Produto','Método','Valor','Status','Ações'],S.sales.map(s=>`<tr><td>${s.d}</td><td>${s.c}</td><td>${s.m}</td><td>${R(s.v)}</td><td>${tag(s.st)}</td><td>${s.st=='pendente'?`<button class="btn o" data-a="pay" data-i="${s.id}">Confirmar</button>`:''}${s.st=='pago'?`<button class="btn r" data-a="ref" data-i="${s.id}">Reembolsar</button>`:''}</td></tr>`),'Nenhuma venda encontrada')},
+produtos(){return head('Produtos','Produtos e links de pagamento.')+`<div class="card"><div class="row">${inp('pn','Nome do produto')}${inp('pp','Valor (R$)','number')}${inp('ps','Estoque (vazio = ilimitado)','number')}${inp('pu','Link após o pagamento (opcional)','url','','https://...')}</div>${inp('pdsc','Descrição (opcional)')}<button class="btn" data-a="addprod">Novo produto</button></div>`+tbl(['Produto','Valor','Estoque','Link de pagamento',''],S.products.map(p=>`<tr><td>${p.n}</td><td>${R(p.v)}</td><td>${p.s||'∞'}</td><td><button class="btn o" data-a="cp" data-t="${location.href.split('#')[0]}#/pagar/${p.id}">Copiar link</button></td><td><button class="btn r" data-a="delprod" data-i="${p.id}">Remover</button></td></tr>`),'Nenhum produto cadastrado')},
+cupons(){return head('Cupons','Cupons de desconto.')+`<div class="card"><div class="row">${inp('cc','Código','text','','BEMVINDO10')}${inp('cp','Desconto (%)','number')}</div><button class="btn" data-a="addcup">Criar cupom</button></div>`+tbl(['Código','Desconto','Usos',''],S.coupons.map(c=>`<tr><td>${c.c}</td><td>${c.p}%</td><td>${c.u}</td><td><button class="btn r" data-a="delcup" data-i="${c.c}">Remover</button></td></tr>`),'Nenhum cupom cadastrado')},
+config(){const c=S.cfg;return head('Configurações do gateway','Identidade, processamento e notificações.')+`<div class="card"><h3>Identidade</h3>${inp('cn','Nome público / marca do checkout','text',c.name)}${inp('ca','Alerta no checkout','text',c.alert)}<h3 style="margin-top:20px">Processamento</h3>${inp('cg','Ghost Key (chave do provedor)','password',c.ghost)}<label>Rota</label><select id="cr">${Object.keys(S.fees).map(r=>`<option ${r==c.route?'selected':''}>${r}</option>`).join('')}</select><h3 style="margin-top:20px">Telegram</h3>${inp('ct','Token do bot','password',c.tg)}${inp('ci','Chat ID','text',c.chat)}<button class="btn" data-a="savecfg">Salvar alterações</button></div>`},
+conta(){return head('Usuário & Senha')+`<div class="card" style="max-width:480px">${inp('au','Nome de usuário','text',S.acc.user)}${inp('ap0','Senha atual (obrigatória)','password')}${inp('ap1','Nova senha (vazio mantém)','password')}${inp('ap2','Confirme a nova senha','password')}<button class="btn" data-a="saveacc">Salvar</button></div>`},
+saque(){const emp=sum(S.wd.filter(w=>w.st=='pendente'),w=>w.v);return head('Saque')+`<div class="grid">${stat('Disponível',R(saldo()))}${stat('Em compensação',R(emp))}</div><div class="card" style="max-width:480px">${inp('wv','Valor','number')}<label>Tipo de chave Pix</label><select id="wt"><option>CPF</option><option>CNPJ</option><option>E-mail</option><option>Telefone</option><option>Aleatória</option></select>${inp('wk','Chave Pix de destino')}<button class="btn" data-a="mkwd">Solicitar saque</button></div><h3 style="margin:10px 0">Histórico</h3>`+tbl(['Data','Chave','Valor','Status'],S.wd.map(w=>`<tr><td>${w.d}</td><td>${w.k}</td><td>${R(w.v)}</td><td>${tag(w.st)}</td></tr>`),'Nenhum pedido de saque ainda')},
+taxas(){return head('Taxas & Rotas','Defina o percentual e a taxa fixa de cada rota.')+tbl(['Rota','Percentual (%)','Fixa (R$)'],Object.entries(S.fees).map(([r,f])=>`<tr><td>${r}${r==S.cfg.route?' <span class="t pago">atual</span>':''}</td><td><input data-fee="${r}" data-k="pct" type="number" value="${f.pct}" style="width:100px"></td><td><input data-fee="${r}" data-k="fix" type="number" value="${f.fix}" style="width:100px"></td></tr>`))},
+api(){const o=location.href.split('#')[0];return head('API','Token e exemplo de integração.')+`<div class="card"><div class="k">Token de acesso</div><code>${S.token||'Nenhum token gerado'}</code><button class="btn" data-a="tok">Gerar novo token</button></div><div class="card"><div class="k">Exemplo — criar cobrança Pix</div><code>curl -X POST ${o}api/create_charge \\\n -H "Authorization: Bearer ${S.token||'SEU_TOKEN'}" \\\n -d '{"amount":29.90,"product_name":"Produto"}'</code><div class="k" style="margin-top:12px">Webhook</div><code>${o}webhook</code></div>`},
+geral(){return head('Dashboard geral','Visão geral da plataforma.')+`<div class="grid">${stat('Volume total',R(recv()))}${stat('Membros ativos',S.users.filter(u=>u.st=='ativo').length+1)}${stat('Pedidos pendentes',S.sales.filter(s=>s.st=='pendente').length)}${stat('Saques aguardando',S.wd.filter(w=>w.st=='pendente').length)}</div><h3 style="margin:10px 0">Top membros por volume</h3>`+tbl(['Membro','Vendas','Volume'],S.sales.length?[`<tr><td>${S.acc.user}</td><td>${pago().length}</td><td>${R(recv())}</td></tr>`]:[],'Nenhum membro com vendas ainda')},
+usuarios(){return head('Usuários da plataforma','Controle de acesso dos membros.')+`<div class="card"><div class="row">${inp('un','Usuário')}${inp('ug','Nome do gateway')}</div><button class="btn" data-a="adduser">Cadastrar membro</button></div>`+tbl(['Usuário','Gateway','Status',''],S.users.map(u=>`<tr><td>${u.n}</td><td>${u.g}</td><td>${tag(u.st)}</td><td><button class="btn o" data-a="susp" data-i="${u.n}">${u.st=='ativo'?'Suspender':'Reativar'}</button></td></tr>`),'Nenhum usuário encontrado')},
+aprovar(){return head('Aprovar saques')+tbl(['Data','Chave','Valor','Status',''],S.wd.map(w=>`<tr><td>${w.d}</td><td>${w.k}</td><td>${R(w.v)}</td><td>${tag(w.st)}</td><td>${w.st=='pendente'?`<button class="btn o" data-a="wok" data-i="${w.id}">Aprovar</button> <button class="btn r" data-a="wno" data-i="${w.id}">Rejeitar</button>`:''}</td></tr>`),'Nenhum pedido de saque')},
+audit(){return head('Trilha de auditoria')+tbl(['Data','Evento','Alvo','Responsável'],S.audit.map(a=>`<tr><td>${a.d}</td><td>${a.e}</td><td>${a.t}</td><td>${a.u}</td></tr>`),'Nenhum evento registrado')}
+};
+const fakePix=(v)=>`00020126580014br.gov.bcb.pix0136${uid()}${uid()}520400005303986540${v.toFixed(2).length}${v.toFixed(2)}5802BR5909${S.cfg.name.slice(0,9)}6009SAO PAULO62070503***6304${uid().slice(0,4).toUpperCase()}`;
+const A={
+mkpix(){const v=+val('pv');if(v<5)return toast('Valor mínimo R$ 5,00');const s=newSale(val('pd')||'Cobrança manual','Pix',v);$('#out').innerHTML=`<div class="k" style="margin-top:14px">Pix gerado · demonstração</div><code>${fakePix(v)}</code><button class="btn o" style="margin-top:8px" data-a="cp" data-t="${fakePix(v)}">Copiar código</button> <button class="btn o" data-a="pay" data-i="${s.id}">Simular pagamento</button>`},
+mkbol(){const v=+val('bv');if(v<5||!val('bn'))return toast('Preencha nome e valor (mín. R$ 5)');newSale(val('bn'),'Boleto',v);const l=Array.from({length:5},()=>String(Math.random()).slice(2,12)).join(' ');$('#out').innerHTML=`<div class="k" style="margin-top:14px">Linha digitável · demonstração</div><code>${l}</code>`},
+pay(e){const s=S.sales.find(x=>x.id==e.dataset.i);s.st='pago';log('Pagamento confirmado',s.id);save();toast('Pagamento confirmado');go()},
+ref(e){if(!confirm('Reembolsar esta venda?'))return;const s=S.sales.find(x=>x.id==e.dataset.i);s.st='reembolsado';log('Reembolso',s.id);save();go()},
+addprod(){const n=val('pn'),v=+val('pp');if(!n||v<5)return toast('Informe nome e valor (mín. R$ 5)');S.products.push({id:uid(),n,v,s:+val('ps')||0,u:val('pu'),d:val('pdsc')});log('Produto criado',n);save();go()},
+delprod(e){if(!confirm('Remover produto?'))return;S.products=S.products.filter(p=>p.id!=e.dataset.i);save();go()},
+addcup(){const c=val('cc').toUpperCase(),p=+val('cp');if(!c||p<=0||p>100)return toast('Código e desconto de 1 a 100');S.coupons.push({c,p,u:0});log('Cupom criado',c);save();go()},
+delcup(e){S.coupons=S.coupons.filter(c=>c.c!=e.dataset.i);save();go()},
+cp(e){navigator.clipboard&&navigator.clipboard.writeText(e.dataset.t);toast('Copiado!')},
+savecfg(){Object.assign(S.cfg,{name:val('cn')||'Nova Pay',alert:val('ca'),ghost:val('cg'),route:$('#cr').value,tg:val('ct'),chat:val('ci')});log('Configurações salvas','gateway');save();toast('Salvo');nav()},
+saveacc(){if(val('ap0')!==S.acc.pass)return toast('Senha atual incorreta');if(val('ap1')&&val('ap1')!==val('ap2'))return toast('As senhas não conferem');S.acc.user=val('au')||S.acc.user;if(val('ap1'))S.acc.pass=val('ap1');log('Conta alterada',S.acc.user);save();toast('Salvo')},
+mkwd(){const v=+val('wv');if(v<=0||v>saldo())return toast('Valor inválido ou acima do saldo');if(!val('wk'))return toast('Informe a chave Pix');S.wd.unshift({id:uid(),d:new Date().toLocaleString('pt-BR'),v,k:val('wk'),st:'pendente'});log('Saque solicitado',R(v));save();go()},
+tok(){if(S.token&&!confirm('Gerar novo token? O atual deixa de valer.'))return;S.token='gwk_'+uid()+uid()+uid()+uid()+uid()+uid();log('Token gerado','api');save();go()},
+adduser(){if(!val('un'))return toast('Informe o usuário');S.users.push({n:val('un'),g:val('ug')||val('un'),st:'ativo'});log('Membro cadastrado',val('un'));save();go()},
+susp(e){const u=S.users.find(x=>x.n==e.dataset.i);u.st=u.st=='ativo'?'suspenso':'ativo';log('Status de membro',u.n);save();go()},
+wok(e){S.wd.find(w=>w.id==e.dataset.i).st='aprovado';log('Saque aprovado',e.dataset.i);save();go()},
+wno(e){S.wd.find(w=>w.id==e.dataset.i).st='rejeitado';log('Saque rejeitado',e.dataset.i);save();go()}
+};
+function nav(){const p=(location.hash.slice(2)||'home');$('#side').innerHTML=`<div class="logo"><i>◆</i>${S.cfg.name}</div>`+MENU.map(([t,it])=>`<h6>${t}</h6>`+it.map(([k,l,b])=>`<a data-p="${k}" class="${k==p?'on':''}">${l}${b?`<b>${b}</b>`:''}</a>`).join('')).join('')+`<h6></h6><a data-p="__out">Sair</a>`}
+function go(){const p=location.hash.slice(2)||'home';$('#app').innerHTML=(V[p]||V.home)();nav()}
+document.addEventListener('click',e=>{const a=e.target.closest('[data-p]');if(a){document.querySelector('aside').classList.remove('open');if(a.dataset.p=='__out'){sessionStorage.removeItem('in');return showLogin()}location.hash='/'+a.dataset.p;return}const b=e.target.closest('[data-a]');if(b)A[b.dataset.a](b)});
+document.addEventListener('change',e=>{const f=e.target.dataset.fee;if(f){S.fees[f][e.target.dataset.k]=+e.target.value;save();toast('Taxa salva')}});
+window.addEventListener('hashchange',go);
+function showLogin(){const L=$('#login');L.style.display='grid';L.innerHTML=`<div class="card"><div class="logo"><i>◆</i>${S.cfg.name}</div><p class="sub">Entre para gerenciar seu gateway</p>${inp('lu','Usuário')}${inp('lp','Senha','password')}<button class="btn" style="width:100%" id="lg">Entrar</button><p class="k" style="margin-top:12px">Primeiro acesso: admin / admin123 (troque em Usuário & Senha)</p></div>`;$('#lg').onclick=()=>{if(val('lu')==S.acc.user&&val('lp')==S.acc.pass){sessionStorage.in=1;L.style.display='none';go()}else toast('Usuário ou senha incorretos')}}
+sessionStorage.in?($('#login').style.display='none',go()):showLogin();
+</script></body></html>
